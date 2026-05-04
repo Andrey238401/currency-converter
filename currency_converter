@@ -1,0 +1,286 @@
+"""
+Currency Converter - Конвертер валют
+Автор: [Андрей Тимофеев]
+
+"""
+
+import tkinter as tk
+from tkinter import ttk, messagebox
+import json
+import os
+from datetime import datetime
+
+
+# ========== НАСТРОЙКИ ==========
+CURRENCIES = ["USD", "EUR", "RUB", "GBP", "JPY", "CNY", "CAD", "CHF", "TRY", "INR"]
+
+# Встроенные курсы (1 USD = X других валют)
+EXCHANGE_RATES = {
+    "USD": 1.0,
+    "EUR": 0.92,
+    "RUB": 91.5,
+    "GBP": 0.79,
+    "JPY": 151.2,
+    "CNY": 7.24,
+    "CAD": 1.37,
+    "CHF": 0.91,
+    "TRY": 32.5,
+    "INR": 83.4
+}
+
+HISTORY_FILE = "history.json"
+
+
+# ========== ОСНОВНЫЕ ФУНКЦИИ ==========
+def load_history():
+    """Загрузка истории из JSON файла"""
+    global history
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                history = json.load(f)
+        except:
+            history = []
+    else:
+        history = []
+
+
+def save_history():
+    """Сохранение истории в JSON файл"""
+    try:
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+    except:
+        pass
+
+
+def convert():
+    """Конвертация валюты"""
+    # Валидация суммы
+    try:
+        amount = float(amount_entry.get())
+        if amount <= 0:
+            messagebox.showwarning("Ошибка ввода", "Сумма должна быть больше 0")
+            return
+    except ValueError:
+        messagebox.showwarning("Ошибка ввода", "Введите корректное число")
+        return
+    
+    # Получаем выбранные валюты
+    from_curr = from_combo.get()
+    to_curr = to_combo.get()
+    
+    # Расчёт
+    rate = EXCHANGE_RATES[to_curr] / EXCHANGE_RATES[from_curr]
+    result = amount * rate
+    
+    # Отображение результата
+    result_label.config(text=f"{amount:.2f} {from_curr} = {result:.2f} {to_curr}")
+    rate_label.config(text=f"Курс: 1 {from_curr} = {rate:.4f} {to_curr}")
+    
+    # Сохранение в историю
+    history.append({
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "amount": amount,
+        "from_currency": from_curr,
+        "result": result,
+        "to_currency": to_curr,
+        "rate": rate
+    })
+    save_history()
+    update_history()
+
+
+def update_history():
+    """Обновление таблицы истории"""
+    for item in history_tree.get_children():
+        history_tree.delete(item)
+    
+    for h in reversed(history[-50:]):  # Показываем последние 50 записей
+        history_tree.insert("", tk.END, values=(
+            h.get("date", ""),
+            f"{h.get('amount', 0):.2f}",
+            h.get("from_currency", ""),
+            f"{h.get('result', 0):.2f}",
+            h.get("to_currency", "")
+        ))
+
+
+def clear_history():
+    """Очистка истории"""
+    if messagebox.askyesno("Подтверждение", "Вы уверены, что хотите очистить всю историю?"):
+        global history
+        history = []
+        save_history()
+        update_history()
+        result_label.config(text="История очищена")
+        window.after(2000, lambda: result_label.config(text=""))
+
+
+def update_rate_display(*args):
+    """Обновление отображения курса при смене валют"""
+    from_curr = from_combo.get()
+    to_curr = to_combo.get()
+    rate = EXCHANGE_RATES[to_curr] / EXCHANGE_RATES[from_curr]
+    rate_label.config(text=f"💰 1 {from_curr} = {rate:.4f} {to_curr}")
+
+
+# ========== СОЗДАНИЕ ИНТЕРФЕЙСА ==========
+window = tk.Tk()
+window.title("Currency Converter - Конвертер валют")
+window.geometry("900x600")
+window.configure(bg="#2c3e50")
+
+# Заголовок
+title_label = tk.Label(
+    window, 
+    text="💱 КОНВЕРТЕР ВАЛЮТ", 
+    font=("Arial", 24, "bold"),
+    bg="#2c3e50", 
+    fg="#ecf0f1"
+)
+title_label.pack(pady=20)
+
+# Основной фрейм
+main_frame = tk.Frame(window, bg="#2c3e50")
+main_frame.pack()
+
+# Поле ввода суммы
+tk.Label(
+    main_frame, 
+    text="Сумма:", 
+    font=("Arial", 14),
+    bg="#2c3e50", 
+    fg="#ecf0f1"
+).grid(row=0, column=0, padx=10, pady=10)
+
+amount_entry = tk.Entry(
+    main_frame, 
+    font=("Arial", 14), 
+    width=15,
+    bg="#ecf0f1"
+)
+amount_entry.grid(row=0, column=1, padx=10, pady=10)
+
+# Выбор "Из валюты"
+tk.Label(
+    main_frame, 
+    text="Из валюты:", 
+    font=("Arial", 14),
+    bg="#2c3e50", 
+    fg="#ecf0f1"
+).grid(row=1, column=0, padx=10, pady=10)
+
+from_combo = ttk.Combobox(
+    main_frame, 
+    values=CURRENCIES, 
+    font=("Arial", 12), 
+    width=10, 
+    state="readonly"
+)
+from_combo.grid(row=1, column=1, padx=10, pady=10)
+from_combo.set("USD")
+from_combo.bind("<<ComboboxSelected>>", update_rate_display)
+
+# Выбор "В валюту"
+tk.Label(
+    main_frame, 
+    text="В валюту:", 
+    font=("Arial", 14),
+    bg="#2c3e50", 
+    fg="#ecf0f1"
+).grid(row=2, column=0, padx=10, pady=10)
+
+to_combo = ttk.Combobox(
+    main_frame, 
+    values=CURRENCIES, 
+    font=("Arial", 12), 
+    width=10, 
+    state="readonly"
+)
+to_combo.grid(row=2, column=1, padx=10, pady=10)
+to_combo.set("EUR")
+to_combo.bind("<<ComboboxSelected>>", update_rate_display)
+
+# Кнопка конвертации
+convert_button = tk.Button(
+    main_frame,
+    text="🔄 КОНВЕРТИРОВАТЬ",
+    font=("Arial", 14, "bold"),
+    bg="#3498db",
+    fg="white",
+    padx=20,
+    pady=10,
+    command=convert
+)
+convert_button.grid(row=3, column=0, columnspan=2, pady=20)
+
+# Результат
+result_label = tk.Label(
+    main_frame,
+    text="",
+    font=("Arial", 16, "bold"),
+    bg="#2c3e50",
+    fg="#f1c40f"
+)
+result_label.grid(row=4, column=0, columnspan=2, pady=10)
+
+# Текущий курс
+rate_label = tk.Label(
+    main_frame,
+    text="💰 1 USD = 0.9200 EUR",
+    font=("Arial", 10),
+    bg="#2c3e50",
+    fg="#95a5a6"
+)
+rate_label.grid(row=5, column=0, columnspan=2, pady=5)
+
+# Кнопка очистки истории
+clear_button = tk.Button(
+    main_frame,
+    text="🗑️ ОЧИСТИТЬ ИСТОРИЮ",
+    font=("Arial", 10),
+    bg="#e74c3c",
+    fg="white",
+    padx=10,
+    command=clear_history
+)
+clear_button.grid(row=6, column=0, columnspan=2, pady=10)
+
+# Фрейм для истории
+history_frame = tk.Frame(window, bg="#34495e")
+history_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+
+tk.Label(
+    history_frame,
+    text="📜 ИСТОРИЯ КОНВЕРТАЦИЙ",
+    font=("Arial", 14, "bold"),
+    bg="#34495e",
+    fg="#ecf0f1"
+).pack(pady=5)
+
+# Таблица истории
+columns = ("Дата", "Сумма", "Из", "Результат", "В")
+history_tree = ttk.Treeview(
+    history_frame,
+    columns=columns,
+    show="headings",
+    height=10
+)
+
+for col in columns:
+    history_tree.heading(col, text=col)
+    history_tree.column(col, width=130)
+
+scrollbar = ttk.Scrollbar(history_frame, orient=tk.VERTICAL, command=history_tree.yview)
+history_tree.configure(yscrollcommand=scrollbar.set)
+
+history_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+# ========== ЗАПУСК ==========
+load_history()
+update_history()
+update_rate_display()
+
+window.mainloop()
